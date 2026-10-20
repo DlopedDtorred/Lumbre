@@ -1,0 +1,143 @@
+name: Build and publish Lumbre
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing GitHub release tag to attach builds to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.asset }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+            asset: lumbre-linux-x86_64.tar.gz
+            llama_target: ""
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+            asset: lumbre-linux-arm64.tar.gz
+            llama_target: ""
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+            asset: lumbre-windows-x86_64.zip
+            llama_target: ""
+          - runner: macos-15-intel
+            goos: darwin
+            goarch: amd64
+            asset: lumbre-macos-x86_64.tar.gz
+            llama_target: ""
+          - runner: macos-14
+            goos: darwin
+            goarch: arm64
+            asset: lumbre-macos-arm64.tar.gz
+            llama_target: ""
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+
+      - name: Build llama.cpp CPU engine
+        shell: bash
+        env:
+          LLAMA_CPP_REF: 1268edac579110aeb1407f7928f53193ed4e28d4
+        run: |
+          git clone https://github.com/ggml-org/llama.cpp.git "$RUNNER_TEMP/llama.cpp"
+          git -C "$RUNNER_TEMP/llama.cpp" checkout "$LLAMA_CPP_REF"
+          cmake -S "$RUNNER_TEMP/llama.cpp" -B "$RUNNER_TEMP/llama-build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_BACKEND_DL=OFF \
+            -DGGML_NATIVE=OFF \
+            -DLLAMA_CURL=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=ON
+          cmake --build "$RUNNER_TEMP/llama-build" --config Release --target llama-server --parallel 2
+
+      - name: Package Unix release
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/package/web"
+          pushd core
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$RUNNER_TEMP/package/lumbre" .
+          popd
+          cp "$RUNNER_TEMP/llama-build/bin/llama-server" "$RUNNER_TEMP/package/llama-server"
+          cp "$RUNNER_TEMP/llama.cpp/LICENSE" "$RUNNER_TEMP/package/LICENSE-llama.cpp"
+          cp LICENSE "$RUNNER_TEMP/package/LICENSE-Lumbre"
+          cp -R web/. "$RUNNER_TEMP/package/web/"
+          chmod +x "$RUNNER_TEMP/package/lumbre" "$RUNNER_TEMP/package/llama-server"
+          tar -czf "$RUNNER_TEMP/${{ matrix.asset }}" -C "$RUNNER_TEMP/package" .
+
+      - name: Package Windows release
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Package = Join-Path $env:RUNNER_TEMP "package"
+          New-Item -ItemType Directory -Force -Path (Join-Path $Package "web") | Out-Null
+          Push-Location core
+          try {
+            go build -trimpath -ldflags="-s -w" -o (Join-Path $Package "lumbre.exe") .
+          } finally {
+            Pop-Location
+          }
+          Copy-Item "$env:RUNNER_TEMP\llama-build\bin\Release\llama-server.exe" (Join-Path $Package "llama-server.exe")
+          Copy-Item "$env:RUNNER_TEMP\llama.cpp\LICENSE" (Join-Path $Package "LICENSE-llama.cpp")
+          Copy-Item LICENSE (Join-Path $Package "LICENSE-Lumbre")
+          Copy-Item web\* (Join-Path $Package "web") -Recurse
+          Compress-Archive -Path "$Package\*" -DestinationPath "$env:RUNNER_TEMP\${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ runner.temp }}/${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Attach release packages
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+
+      - name: Upload assets to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          (cd packages && sha256sum lumbre-* > SHA256SUMS)
+          for asset in packages/lumbre-*; do
+            gh release upload "$RELEASE_TAG" "$asset" --clobber
+          done
+          gh release upload "$RELEASE_TAG" packages/SHA256SUMS --clobber

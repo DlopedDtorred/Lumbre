@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Lumbre",
+  "version": "0.1.0",
+  "identifier": "com.lumbre.local",
+  "build": {
+    "frontendDist": "../../web"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Lumbre",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 720,
+        "minHeight": 560,
+        "center": true,
+        "backgroundColor": "#10110f"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' tauri: asset: http://tauri.localhost; connect-src ipc: http://ipc.localhost http://127.0.0.1:11435; img-src 'self' asset: http://tauri.localhost data: blob:; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "category": "Utility",
+    "shortDescription": "Private local AI workspace",
+    "targets": "all",
+    "icon": []
+  }
+}

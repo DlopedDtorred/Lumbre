@@ -1,0 +1,9 @@
+/core/lumbre
+/core/lumbre.exe
+/core/*.test
+/core/coverage.out
+/web/dist/
+/app/src-tauri/target/
+/app/src-tauri/binaries/
+/app/node_modules/
+/dist/

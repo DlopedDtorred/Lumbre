@@ -1,0 +1,42 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: core/go.mod
+      - name: Test
+        working-directory: core
+        run: go test -race ./...
+      - name: Build supported CLI targets
+        working-directory: core
+        run: |
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/lumbre-linux .
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp/lumbre-windows.exe .
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o /tmp/lumbre-macos .
+  web:
+    name: Web checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript
+        run: node --check web/app.js
+      - name: Check manifests
+        run: node -e 'for (const file of ["web/manifest.webmanifest", "app/src-tauri/tauri.conf.json"]) JSON.parse(require("fs").readFileSync(file))'
+      - name: Check installer syntax
+        run: sh -n scripts/install.sh
