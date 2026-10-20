@@ -110,8 +110,7 @@ case ":$PATH:" in
     if ! grep -Fq '# Lumbre CLI' "$PROFILE" 2>/dev/null; then
       printf '\n# Lumbre CLI\nexport PATH="%s/bin:$PATH"\n' "$INSTALL_DIR" >> "$PROFILE"
     fi
-    echo "Add this to your shell profile to use the lumbre command everywhere:"
-    echo "  export PATH=\"$BIN_DIR:\$PATH\""
+    echo "PATH configured in $PROFILE. Open a new terminal to use lumbre."
     ;;
 esac
 echo "Lumbre installed successfully."

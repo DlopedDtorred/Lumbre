@@ -10,6 +10,26 @@ import (
 	"testing"
 )
 
+func TestHealthDoesNotReportModelWhenNoneIsLoaded(t *testing.T) {
+	engine := filepath.Join(t.TempDir(), "llama-server")
+	if err := os.WriteFile(engine, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LUMBRE_LLAMA_SERVER", engine)
+	recorder := httptest.NewRecorder()
+	newServer().health(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/health", nil))
+	var response struct {
+		LoadedModel string `json:"loadedModel"`
+		Available   bool   `json:"available"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !response.Available || response.LoadedModel != "" {
+		t.Fatalf("unexpected health response: %#v", response)
+	}
+}
+
 func TestModelListOnlyIncludesGGUFFiles(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("LUMBRE_MODELS", root)

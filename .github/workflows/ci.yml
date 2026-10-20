@@ -17,6 +17,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: core/go.mod
+          cache: false
       - name: Test
         working-directory: core
         run: go test -race ./...

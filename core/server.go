@@ -100,7 +100,10 @@ func (s *localServer) health(w http.ResponseWriter, r *http.Request) {
 	}
 	enginePath, engineErr := exec.LookPath(llamaServerPath())
 	s.engineMu.Lock()
-	loaded := filepath.Base(s.engineFile)
+	loaded := ""
+	if s.engineFile != "" {
+		loaded = filepath.Base(s.engineFile)
+	}
 	running := s.engine != nil && s.engine.Process != nil
 	s.engineMu.Unlock()
 	if engineErr != nil {

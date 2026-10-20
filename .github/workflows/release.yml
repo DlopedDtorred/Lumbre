@@ -52,6 +52,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: core/go.mod
+          cache: false
 
       - name: Build llama.cpp CPU engine
         shell: bash
