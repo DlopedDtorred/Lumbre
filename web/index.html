@@ -1,95 +1,95 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#10110f" />
-    <meta name="description" content="Tu espacio privado para inteligencia artificial local." />
+    <meta name="description" content="Your private workspace for local artificial intelligence." />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
-    <title>Lumbre — IA local</title>
+    <title>Lumbre — Local AI</title>
   </head>
   <body>
     <div class="shell">
       <aside class="sidebar" id="sidebar">
-        <a class="brand" href="/" aria-label="Lumbre, inicio">
+        <a class="brand" href="/" aria-label="Lumbre home">
           <span class="brand-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M17.6 2.5c.7 5-1.8 6.9-4.1 9.6-2.6 3-3.9 5.2-3.2 8.4.5 2.4 2.4 4.2 5 4.7-1.2-2.1-.7-4.1.8-5.6.4 2.1 2.2 3.6 4.1 4.1 3.1-2.7 4-6.3 2.9-9.7 3.3 3.1 4.4 6.5 3.4 10-1.3 4.4-5.4 7.2-10.7 7.2C9 31.2 4 27 4 20.7 4 12.8 10.2 7 17.6 2.5Z"/></svg></span>
-          <span class="brand-name">lumbre<span class="brand-period">.</span><small>IA LOCAL</small></span>
+          <span class="brand-name">lumbre<span class="brand-period">.</span><small>LOCAL AI</small></span>
         </a>
 
-        <button class="new-chat" id="new-chat"><span>＋</span> Nueva conversación <kbd>⌘ K</kbd></button>
+        <button class="new-chat" id="new-chat"><span>＋</span> New chat <kbd>⌘ K</kbd></button>
 
-        <div class="side-label">TU ESPACIO</div>
+        <div class="side-label">YOUR SPACE</div>
         <button class="nav-item active" id="nav-chat"><span class="nav-icon">◉</span> Chat</button>
-        <button class="nav-item" id="nav-models"><span class="nav-icon">▤</span> Modelos <span class="nav-count" id="model-count">0</span></button>
+        <button class="nav-item" id="nav-models"><span class="nav-icon">▤</span> Models <span class="nav-count" id="model-count">0</span></button>
 
-        <div class="side-label conversations-label">CONVERSACIONES</div>
-        <div id="history" class="history"><div class="empty-history">Tus conversaciones<br />aparecerán aquí</div></div>
+        <div class="side-label conversations-label">RECENT CHATS</div>
+        <div id="history" class="history"><div class="empty-history">Your conversations<br />will appear here</div></div>
 
         <div class="sidebar-bottom">
           <div class="engine-card">
-            <div class="engine-top"><span class="engine-dot" id="engine-dot"></span><span id="engine-status">Conectando…</span><button id="refresh" title="Actualizar estado" aria-label="Actualizar estado">↻</button></div>
-            <div class="engine-detail" id="engine-detail">Motor local</div>
+            <div class="engine-top"><span class="engine-dot" id="engine-dot"></span><span id="engine-status">Connecting…</span><button id="refresh" title="Refresh status" aria-label="Refresh status">↻</button></div>
+            <div class="engine-detail" id="engine-detail">Local engine</div>
           </div>
-          <div class="privacy-note"><span>◈</span> Tus datos se quedan en tu equipo</div>
-          <div class="sidebar-foot">Lumbre <span id="version">0.1.0</span><span class="foot-right">PRIVADO POR DISEÑO</span></div>
+          <div class="privacy-note"><span>◈</span> Your data stays on your device</div>
+          <div class="sidebar-foot">Lumbre <span id="version">0.1.2</span><span class="foot-right">PRIVATE BY DESIGN</span></div>
         </div>
       </aside>
 
       <main class="main">
         <header class="topbar">
-          <button class="mobile-menu" id="mobile-menu" aria-label="Abrir menú">☰</button>
+          <button class="mobile-menu" id="mobile-menu" aria-label="Open menu">☰</button>
           <div class="breadcrumb">Lumbre <span>/</span> <strong id="top-title">Chat</strong></div>
           <div class="top-actions">
             <span class="local-badge"><span></span> LOCAL</span>
-            <button class="icon-button" id="theme-toggle" title="Cambiar tema" aria-label="Cambiar tema">☼</button>
+            <button class="icon-button" id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">☼</button>
           </div>
         </header>
 
         <section class="chat-view" id="chat-view">
           <div class="welcome" id="welcome">
             <div class="welcome-flame"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M17.6 2.5c.7 5-1.8 6.9-4.1 9.6-2.6 3-3.9 5.2-3.2 8.4.5 2.4 2.4 4.2 5 4.7-1.2-2.1-.7-4.1.8-5.6.4 2.1 2.2 3.6 4.1 4.1 3.1-2.7 4-6.3 2.9-9.7 3.3 3.1 4.4 6.5 3.4 10-1.3 4.4-5.4 7.2-10.7 7.2C9 31.2 4 27 4 20.7 4 12.8 10.2 7 17.6 2.5Z"/></svg></div>
-            <div class="eyebrow">TU IA. TUS REGLAS.</div>
-            <h1>Una buena idea<br />empieza <em>en casa.</em></h1>
-            <p>Inteligencia artificial potente, privada y en tu propio equipo.<br class="desktop-break" /> Sin cuentas. Sin nube. Solo tú y tus ideas.</p>
+            <div class="eyebrow">YOUR AI. YOUR RULES.</div>
+            <h1>A good idea<br />starts <em>at home.</em></h1>
+            <p>Powerful, private artificial intelligence on your own device.<br class="desktop-break" /> No accounts. No cloud. Just you and your ideas.</p>
             <div class="suggestions">
-              <button class="suggestion" data-prompt="Ayúdame a organizar mis ideas para un proyecto nuevo."><span>✳</span> Organiza mis ideas <b>↗</b></button>
-              <button class="suggestion" data-prompt="Explícame de forma clara y con ejemplos cómo funciona la inteligencia artificial local."><span>⌁</span> Explícame algo complejo <b>↗</b></button>
-              <button class="suggestion" data-prompt="Escribe una función en Python que lea un CSV y calcule estadísticas básicas."><span>⌘</span> Escribe algo de código <b>↗</b></button>
+              <button class="suggestion" data-prompt="Help me organize my ideas for a new project."><span>✳</span> Organize my ideas <b>↗</b></button>
+              <button class="suggestion" data-prompt="Explain clearly, with examples, how local artificial intelligence works."><span>⌁</span> Explain something complex <b>↗</b></button>
+              <button class="suggestion" data-prompt="Write a Python function that reads a CSV and calculates basic statistics."><span>⌘</span> Write some code <b>↗</b></button>
             </div>
-            <button class="model-setup" id="setup-cta"><span class="setup-icon">▤</span><span><strong>Primero, elige tu modelo</strong><small>Descarga un modelo abierto para empezar.</small></span><b>→</b></button>
+            <button class="model-setup" id="setup-cta"><span class="setup-icon">▤</span><span><strong>First, choose a model</strong><small>Download an open model to get started.</small></span><b>→</b></button>
           </div>
           <div class="messages" id="messages" aria-live="polite"></div>
           <div class="composer-wrap">
             <div class="composer" id="composer">
-              <textarea id="prompt" rows="1" placeholder="Escribe lo que tienes en mente…" aria-label="Mensaje"></textarea>
-              <div class="composer-tools"><div class="composer-left"><span class="composer-lock">◈</span><select id="chat-model" aria-label="Modelo"><option value="">Elige un modelo</option></select><span class="composer-hint">ENTRETENIMIENTO ↵</span></div><button class="send-button" id="send" aria-label="Enviar mensaje">↑</button></div>
+              <textarea id="prompt" rows="1" placeholder="Ask anything…" aria-label="Message"></textarea>
+              <div class="composer-tools"><div class="composer-left"><span class="composer-lock">◈</span><select id="chat-model" aria-label="Model"><option value="">Choose a model</option></select><span class="composer-hint">ENTER TO SEND ↵</span></div><button class="send-button" id="send" aria-label="Send message">↑</button></div>
             </div>
-            <div class="composer-caption">Lumbre puede equivocarse. Las respuestas se generan en tu dispositivo.</div>
+            <div class="composer-caption">Lumbre can make mistakes. Responses are generated on your device.</div>
           </div>
         </section>
 
         <section class="models-view hidden" id="models-view">
-          <div class="models-header"><div><div class="eyebrow">TU BIBLIOTECA LOCAL</div><h1>Tus modelos<span>.</span></h1><p>Elige lo que quieres ejecutar. Todo permanece en tu equipo.</p></div><button class="download-button" id="open-download"><span>＋</span> Añadir modelo</button></div>
-          <div class="model-callout"><span class="callout-icon">✳</span><div><strong>Un modelo para cada idea.</strong><p>Lumbre ejecuta modelos GGUF con llama.cpp. El rendimiento depende de tu hardware; la GPU se usa si tu versión de llama.cpp la admite.</p></div></div>
-          <div class="models-section-head"><span>INSTALADOS</span><span id="model-total">0 modelos</span></div>
+          <div class="models-header"><div><div class="eyebrow">YOUR LOCAL LIBRARY</div><h1>Your models<span>.</span></h1><p>Choose what to run. Everything stays on your device.</p></div><button class="download-button" id="open-download"><span>＋</span> Add a model</button></div>
+          <div class="model-callout"><span class="callout-icon">✳</span><div><strong>A model for every idea.</strong><p>Lumbre runs GGUF models with llama.cpp. Performance depends on your hardware; GPU acceleration is available when supported by your llama.cpp build.</p></div></div>
+          <div class="models-section-head"><span>INSTALLED</span><span id="model-total">0 models</span></div>
           <div class="model-grid" id="model-grid"></div>
-          <div class="empty-models" id="empty-models"><div class="empty-model-icon">▤</div><h2>Tu biblioteca empieza aquí</h2><p>Añade un modelo GGUF público desde Hugging Face para empezar a conversar.</p><button class="download-button" id="empty-download">＋ Añadir modelo</button><small>Los modelos pueden ocupar varios GB. Revisa su licencia y requisitos.</small></div>
+          <div class="empty-models" id="empty-models"><div class="empty-model-icon">▤</div><h2>Your library starts here</h2><p>Add a public GGUF model from Hugging Face to start chatting.</p><button class="download-button" id="empty-download">＋ Add a model</button><small>Models can take up several GB. Check their license and hardware requirements.</small></div>
         </section>
       </main>
     </div>
 
     <div class="modal-backdrop hidden" id="download-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal">
-        <button class="modal-close" id="close-modal" aria-label="Cerrar">×</button>
-        <div class="eyebrow">DESCARGA DIRECTA</div><h2 id="modal-title">Añade un modelo<span>.</span></h2>
-        <p>Pega el enlace HTTPS directo al archivo <code>.gguf</code>. Se guardará solo en este dispositivo.</p>
-        <label for="model-url">ENLACE AL ARCHIVO GGUF</label><input id="model-url" type="url" placeholder="https://huggingface.co/.../modelo.gguf" autocomplete="url" />
-        <div class="download-progress hidden" id="download-progress"><div><span id="download-name">Descargando…</span><strong id="download-percent">0%</strong></div><div class="progress-track"><span id="progress-bar"></span></div></div>
+        <button class="modal-close" id="close-modal" aria-label="Close">×</button>
+        <div class="eyebrow">DIRECT DOWNLOAD</div><h2 id="modal-title">Add a model<span>.</span></h2>
+        <p>Paste the direct HTTPS link to a <code>.gguf</code> file. It will only be stored on this device.</p>
+        <label for="model-url">GGUF FILE URL</label><input id="model-url" type="url" placeholder="https://huggingface.co/.../model.gguf" autocomplete="url" />
+        <div class="download-progress hidden" id="download-progress"><div><span id="download-name">Downloading…</span><strong id="download-percent">0%</strong></div><div class="progress-track"><span id="progress-bar"></span></div></div>
         <div class="modal-error hidden" id="modal-error"></div>
-        <button class="download-confirm" id="download-confirm">Descargar modelo <span>→</span></button>
-        <div class="modal-foot">Solo HTTPS · Formato GGUF · Modelos públicos</div>
+        <button class="download-confirm" id="download-confirm">Download model <span>→</span></button>
+        <div class="modal-foot">HTTPS only · GGUF format · Public models</div>
       </div>
     </div>
     <div class="toast hidden" id="toast"></div>

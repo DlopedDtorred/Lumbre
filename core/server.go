@@ -43,6 +43,7 @@ func (s *localServer) listen(addr string) error {
 	mux.HandleFunc("/api/v1/models", s.models)
 	mux.HandleFunc("/api/v1/models/download", s.download)
 	mux.HandleFunc("/api/v1/models/load", s.loadModel)
+	mux.HandleFunc("/api/v1/models/stop", s.stopModel)
 	mux.HandleFunc("/v1/models", s.openAIModels)
 	mux.HandleFunc("/v1/chat/completions", s.openAIChat)
 	mux.HandleFunc("/", s.static)
@@ -69,7 +70,7 @@ func (s *localServer) security(next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Origin")
 		}
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -110,7 +111,7 @@ func (s *localServer) health(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"available": false,
 			"engine":    "llama.cpp",
-			"message":   "llama-server no está instalado o no está en PATH.",
+			"message":   "llama-server is not installed or is not available on PATH.",
 		})
 		return
 	}
@@ -125,6 +126,10 @@ func (s *localServer) health(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *localServer) models(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodDelete {
+		s.deleteModel(w, r)
+		return
+	}
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -135,6 +140,38 @@ func (s *localServer) models(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"models": models})
+}
+
+func (s *localServer) deleteModel(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if !validModelName(name) {
+		writeError(w, http.StatusBadRequest, "provide a model filename ending in .gguf")
+		return
+	}
+	s.inferenceMu.Lock()
+	defer s.inferenceMu.Unlock()
+	root, err := modelDirectory()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	path := filepath.Join(root, name)
+	s.engineMu.Lock()
+	loaded := s.engineFile == path && s.engine != nil
+	s.engineMu.Unlock()
+	if loaded {
+		writeError(w, http.StatusConflict, "stop the loaded model before deleting it")
+		return
+	}
+	if err := os.Remove(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeError(w, http.StatusNotFound, "model is not installed")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("delete model: %v", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"deleted": name})
 }
 
 func listModels() ([]modelInfo, error) {
@@ -318,6 +355,32 @@ func (s *localServer) loadModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"loaded": filepath.Base(input.Model)})
+}
+
+func (s *localServer) stopModel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	s.inferenceMu.Lock()
+	defer s.inferenceMu.Unlock()
+	s.engineMu.Lock()
+	defer s.engineMu.Unlock()
+	if s.engine == nil || s.engine.Process == nil {
+		writeError(w, http.StatusConflict, "no model is currently running")
+		return
+	}
+	if err := s.engine.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("stop model: %v", err))
+		return
+	}
+	if s.engineDone != nil {
+		<-s.engineDone
+	}
+	s.engine = nil
+	s.engineDone = nil
+	s.engineFile = ""
+	writeJSON(w, http.StatusOK, map[string]string{"status": "stopped"})
 }
 
 func (s *localServer) openAIModels(w http.ResponseWriter, r *http.Request) {

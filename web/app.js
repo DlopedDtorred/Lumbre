@@ -30,8 +30,8 @@ async function refresh() {
   try {
     const health = await (await request("/api/v1/health")).json();
     dot.className = `engine-dot ${health.available ? "online" : "offline"}`;
-    status.textContent = health.available ? "Llama.cpp listo" : "Motor no instalado";
-    $("#engine-detail").textContent = health.available ? "Ejecución local · CPU / GPU" : health.message;
+    status.textContent = health.available ? "llama.cpp ready" : "Engine not installed";
+    $("#engine-detail").textContent = health.available ? "Local inference · CPU / GPU" : health.message;
     const data = await (await request("/api/v1/models")).json();
     state.models = data.models || [];
     renderModels();
@@ -41,7 +41,7 @@ async function refresh() {
     return health;
   } catch (error) {
     dot.className = "engine-dot offline";
-    status.textContent = "Servidor desconectado";
+    status.textContent = "Server disconnected";
     $("#engine-detail").textContent = error.message;
     return null;
   }
@@ -49,14 +49,14 @@ async function refresh() {
 
 function renderModels() {
   $("#model-count").textContent = state.models.length;
-  $("#model-total").textContent = `${state.models.length} ${state.models.length === 1 ? "modelo" : "modelos"}`;
+  $("#model-total").textContent = `${state.models.length} ${state.models.length === 1 ? "model" : "models"}`;
   $("#empty-models").classList.toggle("hidden", state.models.length > 0);
   $("#model-grid").innerHTML = state.models.map((model) => `
     <article class="model-card ${model.name === $("#chat-model").value ? "selected" : ""}">
       <div class="model-card-top"><div class="model-glyph">✳</div><div><div class="model-name">${escapeHTML(model.name)}</div><div class="model-size">${formatSize(model.size)} · GGUF</div></div></div>
       <div class="model-card-actions"><button class="model-action primary" data-use="${escapeHTML(model.name)}">Usar en chat →</button></div>
     </article>`).join("");
-  $("#chat-model").innerHTML = `<option value="">Elige un modelo</option>` + state.models
+  $("#chat-model").innerHTML = `<option value="">Choose a model</option>` + state.models
     .map((model) => `<option value="${escapeHTML(model.name)}">${escapeHTML(model.name)} · ${formatSize(model.size)}</option>`).join("");
   if (state.models.some((model) => model.name === $("#chat-model").dataset.current)) {
     $("#chat-model").value = $("#chat-model").dataset.current;
@@ -76,7 +76,7 @@ function showView(view) {
   $("#models-view").classList.toggle("hidden", !models);
   $("#nav-chat").classList.toggle("active", !models);
   $("#nav-models").classList.toggle("active", models);
-  $("#top-title").textContent = models ? "Modelos" : "Chat";
+  $("#top-title").textContent = models ? "Models" : "Chat";
   $("#sidebar").classList.remove("open");
 }
 
@@ -101,7 +101,7 @@ async function sendMessage(text = $("#prompt").value.trim()) {
   if (!text || state.busy) return;
   if (!model) {
     showView("models");
-    toast("Descarga un modelo para empezar a chatear.");
+    toast("Download a model before starting a chat.");
     return;
   }
   $("#welcome").classList.add("hidden");
@@ -112,7 +112,7 @@ async function sendMessage(text = $("#prompt").value.trim()) {
   const answerNode = renderMessage("assistant", "", true);
   state.busy = true;
   $("#send").textContent = "■";
-  $("#send").setAttribute("aria-label", "Detener generación");
+  $("#send").setAttribute("aria-label", "Stop generation");
   state.controller = new AbortController();
   let answer = "";
   try {
@@ -135,7 +135,7 @@ async function sendMessage(text = $("#prompt").value.trim()) {
         const data = line.slice(5).trim();
         if (!data || data === "[DONE]") continue;
         const chunk = JSON.parse(data);
-        if (chunk.error) throw new Error(chunk.error.message || "Error al generar respuesta");
+        if (chunk.error) throw new Error(chunk.error.message || "Failed to generate a response");
         answer += chunk.choices?.[0]?.delta?.content || "";
         answerNode.textContent = answer;
         answerNode.parentElement.scrollIntoView({ block: "end", behavior: "smooth" });
@@ -146,14 +146,14 @@ async function sendMessage(text = $("#prompt").value.trim()) {
     if (!state.history.length) addHistory(text);
   } catch (error) {
     if (error.name !== "AbortError") {
-      answerNode.textContent = `No se pudo generar la respuesta: ${error.message}`;
+      answerNode.textContent = `Could not generate a response: ${error.message}`;
       toast(error.message);
     }
   } finally {
     state.busy = false;
     state.controller = null;
     $("#send").textContent = "↑";
-    $("#send").setAttribute("aria-label", "Enviar mensaje");
+    $("#send").setAttribute("aria-label", "Send message");
   }
 }
 
@@ -195,14 +195,14 @@ async function downloadModel() {
   const button = $("#download-confirm");
   $("#modal-error").classList.add("hidden");
   if (!url) {
-    $("#modal-error").textContent = "Pega el enlace directo a un archivo GGUF.";
+    $("#modal-error").textContent = "Paste a direct link to a GGUF file.";
     $("#modal-error").classList.remove("hidden");
     return;
   }
   button.disabled = true;
-  button.innerHTML = "Descargando… <span>↻</span>";
+  button.innerHTML = "Downloading… <span>↻</span>";
   $("#download-progress").classList.remove("hidden");
-  $("#download-name").textContent = url.split("/").pop().split("?")[0] || "Modelo";
+  $("#download-name").textContent = url.split("/").pop().split("?")[0] || "Model";
   try {
     const response = await request("/api/v1/models/download", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }),
@@ -219,7 +219,7 @@ async function downloadModel() {
         if (!line.trim()) continue;
         const progress = JSON.parse(line);
         if (progress.error) throw new Error(progress.error);
-        $("#download-name").textContent = progress.status || "Descargando…";
+        $("#download-name").textContent = progress.status || "Downloading…";
         $("#download-percent").textContent = `${Math.round(progress.progress)}%`;
         $("#progress-bar").style.width = `${Math.max(0, Math.min(100, progress.progress))}%`;
       }
@@ -228,14 +228,14 @@ async function downloadModel() {
     $("#download-modal").classList.add("hidden");
     $("#model-url").value = "";
     await refresh();
-    toast("Modelo descargado. Ya puedes iniciar un chat.");
+    toast("Model downloaded. You can start chatting.");
     showView("models");
   } catch (error) {
     $("#modal-error").textContent = error.message;
     $("#modal-error").classList.remove("hidden");
   } finally {
     button.disabled = false;
-    button.innerHTML = 'Descargar modelo <span>→</span>';
+    button.innerHTML = 'Download model <span>→</span>';
   }
 }
 
@@ -259,7 +259,7 @@ $("#model-grid").addEventListener("click", (event) => {
   $("#chat-model").value = button.dataset.use;
   $("#chat-model").dataset.current = button.dataset.use;
   showView("chat");
-  toast(`${button.dataset.use} listo para usar.`);
+  toast(`${button.dataset.use} is ready to use.`);
 });
 $("#send").addEventListener("click", () => {
   if (state.busy) state.controller?.abort();

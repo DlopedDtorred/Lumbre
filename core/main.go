@@ -10,12 +10,15 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
-const version = "0.1.1"
+const version = "0.1.2"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -34,6 +37,16 @@ func main() {
 			fatal(err)
 		}
 	case "models":
+		if err := ensureServer(); err != nil {
+			fatal(err)
+		}
+		if err := runModels(); err != nil {
+			fatal(err)
+		}
+	case "list", "ls":
+		if err := ensureServer(); err != nil {
+			fatal(err)
+		}
 		if err := runModels(); err != nil {
 			fatal(err)
 		}
@@ -41,17 +54,64 @@ func main() {
 		if len(os.Args) < 3 {
 			fatal(errors.New("usage: lumbre pull MODEL_URL"))
 		}
+		if err := ensureServer(); err != nil {
+			fatal(err)
+		}
 		if err := runPull(os.Args[2]); err != nil {
 			fatal(err)
 		}
-	case "chat":
+	case "run", "chat":
 		model := ""
 		if len(os.Args) >= 3 {
 			model = os.Args[2]
 		}
+		if err := ensureServer(); err != nil {
+			fatal(err)
+		}
+		if model == "" {
+			if err := selectModel(&model); err != nil {
+				fatal(err)
+			}
+		}
 		if err := runChat(model); err != nil {
 			fatal(err)
 		}
+	case "ps":
+		if err := ensureServer(); err != nil {
+			fatal(err)
+		}
+		if err := runRunningModels(); err != nil {
+			fatal(err)
+		}
+	case "show":
+		if len(os.Args) < 3 {
+			fatal(errors.New("usage: lumbre show MODEL"))
+		}
+		if err := ensureServer(); err != nil {
+			fatal(err)
+		}
+		if err := runShow(os.Args[2]); err != nil {
+			fatal(err)
+		}
+	case "rm", "remove":
+		if len(os.Args) < 3 {
+			fatal(errors.New("usage: lumbre rm MODEL"))
+		}
+		if err := ensureServer(); err != nil {
+			fatal(err)
+		}
+		if err := runRemove(os.Args[2]); err != nil {
+			fatal(err)
+		}
+	case "stop":
+		if err := ensureServer(); err != nil {
+			fatal(err)
+		}
+		if err := runStop(); err != nil {
+			fatal(err)
+		}
+	case "help", "--help", "-h":
+		printUsage()
 	default:
 		printUsage()
 		os.Exit(2)
@@ -62,11 +122,18 @@ func printUsage() {
 	fmt.Print(`Lumbre — local AI, your way
 
 Usage:
-  lumbre serve [--host HOST] [--port PORT]  Start the local API and web app
-  lumbre models                             List local GGUF models
-  lumbre pull MODEL_URL                     Download a GGUF model from HTTPS
-  lumbre chat [MODEL]                       Start an interactive chat
-  lumbre version                            Print the version
+  lumbre run MODEL                  Run a model and start chatting
+  lumbre run                        Choose a model and start chatting
+  lumbre pull MODEL_URL             Download a GGUF model
+  lumbre list                       List installed models (alias: ls)
+  lumbre ps                         Show the loaded model
+  lumbre show MODEL                 Show model details
+  lumbre rm MODEL                   Remove an installed model
+  lumbre stop                       Stop the loaded model
+  lumbre serve [--host HOST] [--port PORT]
+                                    Start the local API and web app
+  lumbre version                    Print the version
+  lumbre help                       Show this help
 `)
 }
 
@@ -102,13 +169,134 @@ func runModels() error {
 		return err
 	}
 	if len(result.Models) == 0 {
-		fmt.Println("No GGUF models installed. Download one with: lumbre pull MODEL_URL")
+		fmt.Println("No models installed. Download a GGUF model with: lumbre pull MODEL_URL")
 		return nil
 	}
-	fmt.Printf("%-40s %s\n", "MODEL", "SIZE")
+	fmt.Printf("%-40s %s\n", "NAME", "SIZE")
 	for _, model := range result.Models {
 		fmt.Printf("%-40s %s\n", model.Name, humanSize(model.Size))
 	}
+	return nil
+}
+
+func selectModel(selected *string) error {
+	resp, err := apiRequest(http.MethodGet, "/api/v1/models", nil)
+	if err != nil {
+		return fmt.Errorf("could not list models: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return responseError(resp)
+	}
+	var result struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+	if len(result.Models) == 0 {
+		return errors.New("no models installed; add a GGUF model with `lumbre pull MODEL_URL`")
+	}
+	fmt.Println("Choose a model:")
+	for index, model := range result.Models {
+		fmt.Printf("  %d. %s\n", index+1, model.Name)
+	}
+	fmt.Print("Model number: ")
+	var choice int
+	if _, err := fmt.Scan(&choice); err != nil {
+		return fmt.Errorf("read model choice: %w", err)
+	}
+	if choice < 1 || choice > len(result.Models) {
+		return errors.New("model number is out of range")
+	}
+	*selected = result.Models[choice-1].Name
+	return nil
+}
+
+func runRunningModels() error {
+	resp, err := apiRequest(http.MethodGet, "/api/v1/health", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return responseError(resp)
+	}
+	var health struct {
+		LoadedModel string `json:"loadedModel"`
+		Running     bool   `json:"running"`
+		Engine      string `json:"engine"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+		return err
+	}
+	fmt.Printf("%-40s %-12s %s\n", "NAME", "PROCESSOR", "STATUS")
+	if !health.Running || health.LoadedModel == "" {
+		fmt.Println("No models are currently loaded.")
+		return nil
+	}
+	fmt.Printf("%-40s %-12s %s\n", health.LoadedModel, "CPU/GPU", "running")
+	return nil
+}
+
+func runShow(name string) error {
+	resp, err := apiRequest(http.MethodGet, "/api/v1/models", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return responseError(resp)
+	}
+	var result struct {
+		Models []struct {
+			Name string `json:"name"`
+			Size int64  `json:"size"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+	for _, model := range result.Models {
+		if model.Name != name {
+			continue
+		}
+		fmt.Printf("  Name:        %s\n", model.Name)
+		fmt.Printf("  Size:        %s\n", humanSize(model.Size))
+		fmt.Printf("  Format:      GGUF\n")
+		fmt.Printf("  Engine:      llama.cpp\n")
+		fmt.Printf("  Parameters:  use `llama-server --help` for engine options\n")
+		return nil
+	}
+	return fmt.Errorf("model %q is not installed; run `lumbre list` to see installed models", name)
+}
+
+func runRemove(name string) error {
+	path := "/api/v1/models?name=" + url.QueryEscape(name)
+	resp, err := apiRequest(http.MethodDelete, path, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return responseError(resp)
+	}
+	fmt.Printf("Deleted model %s.\n", name)
+	return nil
+}
+
+func runStop() error {
+	resp, err := apiRequest(http.MethodPost, "/api/v1/models/stop", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return responseError(resp)
+	}
+	fmt.Println("Model stopped.")
 	return nil
 }
 
@@ -147,24 +335,19 @@ func runPull(url string) error {
 
 func runChat(model string) error {
 	reader := bufio.NewReader(os.Stdin)
-	if model == "" {
-		fmt.Print("Model: ")
-		value, err := reader.ReadString('\n')
-		if err != nil && value == "" {
-			return errors.New("provide a model name, for example: lumbre chat model.gguf")
-		}
-		model = strings.TrimSpace(value)
-	}
 	messages := make([]map[string]string, 0)
-	fmt.Printf("Chatting with %s. Type /exit to leave.\n\n", model)
+	fmt.Printf(">>> %s\nType /exit or /bye to leave.\n\n", model)
 	for {
-		fmt.Print("you> ")
+		fmt.Print(">>> ")
 		text, err := reader.ReadString('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
 			return err
 		}
 		text = strings.TrimSpace(text)
 		if text == "/exit" || text == "/quit" {
+			return nil
+		}
+		if text == "/bye" {
 			return nil
 		}
 		if text != "" {
@@ -185,6 +368,9 @@ func runChat(model string) error {
 				return requestErr
 			}
 			fmt.Print("\n\n")
+			if answer == "" {
+				fmt.Println("(The model returned an empty response.)")
+			}
 			messages = append(messages, map[string]string{"role": "assistant", "content": answer})
 		}
 		if errors.Is(err, io.EOF) {
@@ -241,6 +427,42 @@ func apiRequest(method, path string, body io.Reader) (*http.Response, error) {
 	return (&http.Client{Timeout: 0}).Do(req)
 }
 
+func ensureServer() error {
+	resp, err := apiRequest(http.MethodGet, "/api/v1/health", nil)
+	if err == nil {
+		resp.Body.Close()
+		return nil
+	}
+	base, parseErr := url.Parse(lumbreBaseURL())
+	if parseErr != nil || base.Hostname() != "127.0.0.1" && base.Hostname() != "localhost" && base.Hostname() != "::1" {
+		return fmt.Errorf("could not connect to Lumbre at %s: %w", lumbreBaseURL(), err)
+	}
+	executable, execErr := os.Executable()
+	if execErr != nil {
+		return fmt.Errorf("locate Lumbre executable: %w", execErr)
+	}
+	command := exec.Command(executable, "serve")
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	if err := command.Start(); err != nil {
+		return fmt.Errorf("start Lumbre server: %w", err)
+	}
+	if err := command.Process.Release(); err != nil {
+		return fmt.Errorf("detach Lumbre server: %w", err)
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := apiRequest(http.MethodGet, "/api/v1/health", nil)
+		if err == nil {
+			resp.Body.Close()
+			fmt.Println("Started Lumbre server.")
+			return nil
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return fmt.Errorf("Lumbre server did not start; run `lumbre serve` to see diagnostic output")
+}
+
 func responseError(resp *http.Response) error {
 	content, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
@@ -282,7 +504,8 @@ func envInt(key string, fallback int) int {
 }
 
 func lumbreBaseURL() string {
-	return envOr("LUMBRE_URL", fmt.Sprintf("http://127.0.0.1:%d", envInt("LUMBRE_PORT", 11435)))
+	base := envOr("LUMBRE_URL", fmt.Sprintf("http://127.0.0.1:%d", envInt("LUMBRE_PORT", 11435)))
+	return strings.TrimRight(base, "/")
 }
 
 func llamaServerPath() string {

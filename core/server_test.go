@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,6 +48,68 @@ func TestModelListOnlyIncludesGGUFFiles(t *testing.T) {
 	}
 	if len(models) != 1 || models[0].Name != "model.gguf" || models[0].Size != 4 {
 		t.Fatalf("unexpected model list: %#v", models)
+	}
+}
+
+func TestDeleteModelDeletesOnlyNamedUnloadedModel(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("LUMBRE_MODELS", root)
+	modelPath := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(modelPath, []byte("gguf"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server := newServer()
+	recorder := httptest.NewRecorder()
+	server.deleteModel(recorder, httptest.NewRequest(http.MethodDelete, "/api/v1/models?name=model.gguf", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected model deletion to succeed, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if _, err := os.Stat(modelPath); !os.IsNotExist(err) {
+		t.Fatalf("model still exists after deletion: %v", err)
+	}
+}
+
+func TestDeleteModelRejectsTraversalAndLoadedModel(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("LUMBRE_MODELS", root)
+	modelPath := filepath.Join(root, "model.gguf")
+	if err := os.WriteFile(modelPath, []byte("gguf"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server := newServer()
+	for _, name := range []string{"../model.gguf", "/tmp/model.gguf", "not-a-model.txt"} {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodDelete, "/api/v1/models?name="+url.QueryEscape(name), nil)
+		server.deleteModel(recorder, request)
+		if recorder.Code != http.StatusBadRequest {
+			t.Errorf("model name %q returned status %d", name, recorder.Code)
+		}
+	}
+	server.engineFile = modelPath
+	server.engine = &exec.Cmd{Process: &os.Process{Pid: 12345}}
+	recorder := httptest.NewRecorder()
+	server.deleteModel(recorder, httptest.NewRequest(http.MethodDelete, "/api/v1/models?name=model.gguf", nil))
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected loaded model deletion to be rejected, got %d", recorder.Code)
+	}
+	if _, err := os.Stat(modelPath); err != nil {
+		t.Fatalf("loaded model was deleted: %v", err)
+	}
+}
+
+func TestModelRouteAllowsCORSPreflightForDelete(t *testing.T) {
+	handler := newServer().security(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodOptions, "/api/v1/models", nil)
+	request.Header.Set("Origin", "http://localhost:5173")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("expected successful preflight, got %d", recorder.Code)
+	}
+	if methods := recorder.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(methods, "DELETE") {
+		t.Fatalf("CORS methods do not permit DELETE: %q", methods)
 	}
 }
 
